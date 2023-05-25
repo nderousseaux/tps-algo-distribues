@@ -1,0 +1,98 @@
+/* algorithme d'election en maille */
+
+/* version ou le proc elu se declare chef */
+
+#define N 4 
+
+
+typedef tabcan {
+   	chan to[N] = [1] of { short }
+};
+
+tabcan from[N];
+
+chan canal_verif[N] = [1] of { short };
+
+int nbelu; /* sert a verifier qu'un seul proc est elu */
+
+/* use of tabcan : from[x].to[y] */
+
+inline comparaison(num, chef, nbrec)
+{
+	  if
+	  ::num < chef -> chef= num;
+	  ::else -> skip;
+          fi;
+	  nbrec++;
+} 
+
+proctype electeur (short numproc; chan em1, em2, em3, rec1,rec2,rec3,can_verif)
+{
+ short i, nbrec, num, chef=numproc;
+
+/* emission de numproc vers tous les autres processus */
+
+em1!numproc;em2!numproc;em3!numproc;
+
+/* reception des numeros de tous les autres processus */
+
+
+do
+::(nbrec < N-1) -> 
+	if
+	:: rec1?num;
+	  	comparaison(num, chef, nbrec);
+	:: rec2?num; 
+	  	comparaison(num, chef, nbrec);
+	:: rec3?num; 
+	  	comparaison(num, chef, nbrec);
+	fi;
+:: else -> break
+od;
+
+/* printf chef */
+printf("le processus %d a elu le processus elu %d\n",numproc,chef);
+
+if
+::(numproc == chef) -> printf("le processus %d se declare elu\n",numproc);nbelu++;
+			assert(nbelu==1);
+::else -> skip;
+fi;
+can_verif!chef;
+assert(chef <= numproc); /* verification seulement locale => pas suffisant */
+assert(nbelu <= 1);  /* si on met ici assert (nb_elu==1) : erreur de verification car un processus non élu peut se terminer 
+			avant que le processus elu se déclare élu */
+}
+
+proctype verification (chan verif0,verif1,verif2,verif3)
+{short chef0, chef1, chef2, chef3; 
+ short i=N;
+ do
+  ::(i>0) ->
+    if
+    ::verif0?chef0;
+    ::verif1?chef1;
+    ::verif2?chef2;
+    ::verif3?chef3;
+    fi;
+    i--;
+  :: else -> break
+  od;
+  assert((chef0==chef1) && (chef1==chef2) && (chef2==chef3))
+}
+
+init
+{
+
+atomic {	
+	run electeur(1, from[0].to[1], from[0].to[2], from[0].to[3], 
+		from[1].to[0], from[2].to[0], from[3].to[0],canal_verif[0]);
+	run electeur(2, from[1].to[0], from[1].to[2], from[1].to[3], 
+		from[0].to[1], from[2].to[1], from[3].to[1],canal_verif[1]);
+	run electeur(3, from[2].to[0], from[2].to[1], from[2].to[3], 
+		from[0].to[2], from[1].to[2], from[3].to[2],canal_verif[2]);
+	run electeur(4, from[3].to[0], from[3].to[1], from[3].to[2], 
+		from[0].to[3], from[1].to[3], from[2].to[3],canal_verif[3]);
+	run verification(canal_verif[0],canal_verif[1],canal_verif[2],canal_verif[3]);
+	}
+}
